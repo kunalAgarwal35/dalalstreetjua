@@ -192,6 +192,143 @@ def raw_cdf_model(spot,vix_min,vix_max,timestamp,expiry):
     pbelow.update(zip(data,probs))
     return pbelow
 
+def spread_evs_from_pbelow(opt_ltps, opt_ois, prob_below,trade_range):
+    prob_ltps = {}
+    prob_ois = {}
+    Keymax = max(zip(opt_ltps.values(), opt_ltps.keys()))[1]
+    valmax = max(zip(opt_ltps.values(), opt_ltps.keys()))[0]
+    opt_type = 'CE' if 'CE' in Keymax else 'PE'
+    if opt_type == 'CE':
+        syn_spot = name_to_strike(Keymax) + valmax
+    else:
+        syn_spot = name_to_strike(Keymax) - valmax
+    l,u = syn_spot*(1-trade_range),syn_spot*(1+trade_range)
+    for key in opt_ltps.keys():
+        if l < name_to_strike(key) < u:
+            prob_ltps[key] = opt_ltps[key]
+            prob_ois[key] = opt_ois[key]
+    opt_ltps,opt_ois = prob_ltps,prob_ois
+    puts = {}
+    calls = {}
+    for item in opt_ltps.keys():
+        if 'CE' in item:
+            calls[item] = opt_ltps[item]
+        else:
+            puts[item] = opt_ltps[item]
+    calls = sort_by_strike(calls)
+    puts = sort_by_strike(puts)
+    call_spreads = {}
+    put_spreads = {}
+    for i in range(0, len(calls) - 2):
+        for j in range(i + 1, len(calls) - 1):
+            buykey = list(calls.keys())[j]
+            sellkey = list(calls.keys())[i]
+            credit_collected = calls[sellkey] - calls[buykey]
+            sell_strike = int(sellkey.replace('CE', ''))
+            buy_strike = int(buykey.replace('CE', ''))
+            width = buy_strike - sell_strike
+            be = buy_strike + credit_collected
+            profit_below_sell = credit_collected
+            profit_above_buy = credit_collected - width
+            area_between = 0.5 * (prob_below[buy_strike] - prob_below[sell_strike]) * (
+                    profit_below_sell + profit_above_buy) / 10000
+            area_below_sell = profit_below_sell * (prob_below[sell_strike]) / 100
+            area_above_buy = profit_above_buy * (100 - prob_below[buy_strike]) / 100
+            spread = buykey + '-' + sellkey
+            call_spreads[spread] = area_below_sell + area_between + area_above_buy
+    for i in range(0, len(puts) - 2):
+        for j in range(i + 1, len(puts) - 1):
+            buykey = list(puts.keys())[i]
+            sellkey = list(puts.keys())[j]
+            credit_collected = puts[sellkey] - puts[buykey]
+            sell_strike = int(sellkey.replace('PE', ''))
+            buy_strike = int(buykey.replace('PE', ''))
+            width = sell_strike - buy_strike
+            be = sell_strike - credit_collected
+            profit_above_sell = credit_collected
+            profit_below_buy = credit_collected - width
+            area_between = 0.5 * (prob_below[sell_strike] - prob_below[buy_strike]) * (
+                    profit_above_sell + profit_below_buy) / 10000
+            area_above_sell = profit_above_sell * (100 - prob_below[sell_strike]) / 100
+            area_below_buy = profit_below_buy * (prob_below[buy_strike]) / 100
+            spread = buykey + '-' + sellkey
+            put_spreads[spread] = area_above_sell + area_between + area_below_buy
+    put_spreads = dict(sorted(put_spreads.items(), key=lambda item: item[1]))
+    call_spreads = dict(sorted(call_spreads.items(), key=lambda item: item[1]))
+    for key in put_spreads.keys():
+        put_spreads[key] = round_down(put_spreads[key])
+    for key in call_spreads.keys():
+        call_spreads[key] = round_down(call_spreads[key])
+    # print(time.time() - t1, 'spread_evs')
+    return put_spreads, call_spreads
+
+def add_debit_spreads(put_spreads, call_spreads):
+    t1 = time.time()
+    _ = list(call_spreads.keys())
+    for key in _:
+        s1 = key[:key.index('-')]
+        s2 = key[key.index('-') + 1:]
+        spread2 = s2 + '-' + s1
+        call_spreads[spread2] = - call_spreads[key]
+    _ = list(put_spreads.keys())
+    for key in _:
+        s1 = key[:key.index('-')]
+        s2 = key[key.index('-') + 1:]
+        spread2 = s2 + '-' + s1
+        put_spreads[spread2] = - put_spreads[key]
+    put_spreads = dict(sorted(put_spreads.items(), key=lambda item: item[1]))
+    call_spreads = dict(sorted(call_spreads.items(), key=lambda item: item[1]))
+    for key in put_spreads.keys():
+        keys = key.split('-')
+        put_spreads[key] = round_down(put_spreads[key])
+    for key in call_spreads.keys():
+        keys = key.split('-')
+        call_spreads[key] = round_down(call_spreads[key])
+    return put_spreads, call_spreads
+
+def realized_vs_projected(spreads,expiry_spot,opt_ltps):
+    m_realized = 0
+    m_projected = 0
+    for spread in spreads.keys():
+        m_realized += find_spread_result(spread,expiry_spot,opt_ltps)
+        m_projected += spreads[spread]
+    return m_realized,m_projected
+
+def find_existing_positions_result(pos,price, expiry):
+    name = list(pos.keys())[0]
+    pnl = 0
+    strike = name_to_strike(name)
+    diff = abs(expiry - strike)
+    if 'CE' in name:
+        if expiry > strike:
+            return (diff - price)*pos[name]
+        else:
+            return -price*pos[name]
+    elif 'PE' in name:
+        if expiry > strike:
+            return -price * pos[name]
+        else:
+            return (diff - price) * pos[name]
+    return pnl
+
+def find_spread_result(spread,expiry_spot,opt_ltps):
+    spread = spread.split('-')
+    s0, s1 = spread[0],spread[1]
+    res = find_existing_positions_result({s0:1},opt_ltps[s0],expiry_spot)
+    res += find_existing_positions_result({s1:-1},opt_ltps[s1],expiry_spot)
+    return res
+
+def pbelow_to_distribution(pbelowdict):
+    dist = pd.DataFrame()
+    dist['spot'] = list(pbelowdict.keys())
+    dist['pbelow'] = list(pbelowdict.values())
+    dist['pbelow_shift'] = dist['pbelow'].shift(1)
+    dist['pbelow_shift2'] = dist['pbelow_shift'].fillna(0)
+    dist['dist'] = dist['pbelow'] - dist['pbelow_shift']
+    sumdist = (dist['pbelow'] - dist['pbelow_shift2']).sum()
+    dist = dist[['spot', 'dist']]
+    return dist, sumdist
+
 
 
 
