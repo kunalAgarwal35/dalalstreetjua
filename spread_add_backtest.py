@@ -28,7 +28,10 @@ for file in expiry_files:
     for timestamp in timestamplist:
         pbnow = pb[timestamp]
         try:
-            put_spreads, call_spreads = fs.spread_evs_from_pbelow(pbnow['ltps'],pbnow['ois'], pbnow['probability_below_x_raw'],0.3)
+            # put_spreads, call_spreads = fs.spread_evs_from_pbelow(pbnow['ltps'],pbnow['ois'], pbnow['probability_below_x'],0.03)
+            put_spreads, call_spreads = fs.spread_evs_from_dist(pbnow['ltps'],pbnow['ois'],
+                                                                fs.nifty_distribution_custom(pbnow['vix']*0.8,pbnow['vix']*1.2,fs.find_trading_sessions(timestamp,expiry),
+                                                                                             fs.merged_df.copy()[fs.merged_df['nifty_date']<timestamp]),0.03)
             put_spreads,call_spreads = fs.add_debit_spreads(put_spreads,call_spreads)
             if not len(put_spreads) or not len(call_spreads):
                 continue
