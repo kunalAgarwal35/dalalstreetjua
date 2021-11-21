@@ -241,10 +241,12 @@ def spread_evs_from_pbelow(opt_ltps, opt_ois, prob_below,trade_range):
     puts = sort_by_strike(puts)
     call_spreads = {}
     put_spreads = {}
+    clist = list(calls.keys())
+    plist = list(puts.keys())
     for i in range(0, len(calls) - 2):
         for j in range(i + 1, len(calls) - 1):
-            buykey = list(calls.keys())[j]
-            sellkey = list(calls.keys())[i]
+            buykey = clist[j]
+            sellkey = clist[i]
             credit_collected = calls[sellkey] - calls[buykey]
             sell_strike = int(sellkey.replace('CE', ''))
             buy_strike = int(buykey.replace('CE', ''))
@@ -257,11 +259,11 @@ def spread_evs_from_pbelow(opt_ltps, opt_ois, prob_below,trade_range):
             area_below_sell = profit_below_sell * (prob_below[sell_strike]) / 100
             area_above_buy = profit_above_buy * (100 - prob_below[buy_strike]) / 100
             spread = buykey + '-' + sellkey
-            call_spreads[spread] = area_below_sell + area_between + area_above_buy
+            call_spreads[spread] = round_down(area_below_sell + area_between + area_above_buy)
     for i in range(0, len(puts) - 2):
         for j in range(i + 1, len(puts) - 1):
-            buykey = list(puts.keys())[i]
-            sellkey = list(puts.keys())[j]
+            buykey = plist[i]
+            sellkey = plist[j]
             credit_collected = puts[sellkey] - puts[buykey]
             sell_strike = int(sellkey.replace('PE', ''))
             buy_strike = int(buykey.replace('PE', ''))
@@ -274,13 +276,13 @@ def spread_evs_from_pbelow(opt_ltps, opt_ois, prob_below,trade_range):
             area_above_sell = profit_above_sell * (100 - prob_below[sell_strike]) / 100
             area_below_buy = profit_below_buy * (prob_below[buy_strike]) / 100
             spread = buykey + '-' + sellkey
-            put_spreads[spread] = area_above_sell + area_between + area_below_buy
+            put_spreads[spread] = round_down(area_above_sell + area_between + area_below_buy)
     put_spreads = dict(sorted(put_spreads.items(), key=lambda item: item[1]))
     call_spreads = dict(sorted(call_spreads.items(), key=lambda item: item[1]))
-    for key in put_spreads.keys():
-        put_spreads[key] = round_down(put_spreads[key])
-    for key in call_spreads.keys():
-        call_spreads[key] = round_down(call_spreads[key])
+    # for key in put_spreads.keys():
+    #     put_spreads[key] = round_down(put_spreads[key])
+    # for key in call_spreads.keys():
+    #     call_spreads[key] = round_down(call_spreads[key])
     # print(time.time() - t1, 'spread_evs')
     return put_spreads, call_spreads
 
@@ -379,10 +381,12 @@ def spread_evs_from_dist(opt_ltps, opt_ois, dist,trade_range):
     call_spreads = {}
     put_spreads = {}
     scipy_kde = gaussian_kde(dist)
+    clist = list(calls.keys())
+    plist = list(puts.keys())
     for i in range(0, len(calls) - 2):
         for j in range(i + 1, len(calls) - 1):
-            buykey = list(calls.keys())[j]
-            sellkey = list(calls.keys())[i]
+            buykey = clist[j]
+            sellkey = clist[i]
             credit_collected = calls[sellkey] - calls[buykey]
             sell_strike = int(sellkey.replace('CE', ''))
             buy_strike = int(buykey.replace('CE', ''))
@@ -390,16 +394,17 @@ def spread_evs_from_dist(opt_ltps, opt_ois, dist,trade_range):
             be = buy_strike + credit_collected
             profit_below_sell = credit_collected
             profit_above_buy = credit_collected - width
-            area_between = 0.5 * (scipy_kde.integrate_box_1d(np.log(sell_strike/syn_spot), np.log(buy_strike/syn_spot))) * (
-                    profit_below_sell + profit_above_buy)
-            area_below_sell = profit_below_sell * (scipy_kde.integrate_box_1d(-100,np.log(sell_strike/syn_spot)))
-            area_above_buy = profit_above_buy * (scipy_kde.integrate_box_1d(np.log(buy_strike/syn_spot),100))
+            sell_strike_pct = np.log(sell_strike / syn_spot)
+            buy_strike_pct = np.log(buy_strike / syn_spot)
+            area_between = 0.5 * (scipy_kde.integrate_box_1d(sell_strike_pct, buy_strike_pct)) * (profit_below_sell + profit_above_buy)
+            area_below_sell = profit_below_sell * (scipy_kde.integrate_box_1d(-100,sell_strike_pct))
+            area_above_buy = profit_above_buy * (scipy_kde.integrate_box_1d(buy_strike_pct,100))
             spread = buykey + '-' + sellkey
-            call_spreads[spread] = area_below_sell + area_between + area_above_buy
+            call_spreads[spread] = round_down(area_below_sell + area_between + area_above_buy)
     for i in range(0, len(puts) - 2):
         for j in range(i + 1, len(puts) - 1):
-            buykey = list(puts.keys())[i]
-            sellkey = list(puts.keys())[j]
+            buykey = plist[i]
+            sellkey = plist[j]
             credit_collected = puts[sellkey] - puts[buykey]
             sell_strike = int(sellkey.replace('PE', ''))
             buy_strike = int(buykey.replace('PE', ''))
@@ -407,18 +412,20 @@ def spread_evs_from_dist(opt_ltps, opt_ois, dist,trade_range):
             be = sell_strike - credit_collected
             profit_above_sell = credit_collected
             profit_below_buy = credit_collected - width
-            area_between = 0.5 * (scipy_kde.integrate_box_1d(np.log(buy_strike/syn_spot), np.log(sell_strike/syn_spot))) * (
-                    profit_above_sell + profit_below_buy)
-            area_above_sell = profit_above_sell * scipy_kde.integrate_box_1d(np.log(sell_strike/syn_spot),100)
-            area_below_buy = profit_below_buy * scipy_kde.integrate_box_1d(-100,np.log(buy_strike/syn_spot))
+            sell_strike_pct = np.log(sell_strike / syn_spot)
+            buy_strike_pct = np.log(buy_strike / syn_spot)
+            area_between = 0.5 * (scipy_kde.integrate_box_1d(buy_strike_pct, sell_strike_pct)) * (profit_above_sell + profit_below_buy)
+            area_above_sell = profit_above_sell * scipy_kde.integrate_box_1d(sell_strike_pct,100)
+            area_below_buy = profit_below_buy * scipy_kde.integrate_box_1d(-100,buy_strike_pct)
             spread = buykey + '-' + sellkey
-            put_spreads[spread] = area_above_sell + area_between + area_below_buy
+            put_spreads[spread] = round_down(area_above_sell + area_between + area_below_buy)
     put_spreads = dict(sorted(put_spreads.items(), key=lambda item: item[1]))
     call_spreads = dict(sorted(call_spreads.items(), key=lambda item: item[1]))
-    for key in put_spreads.keys():
-        put_spreads[key] = round_down(put_spreads[key])
-    for key in call_spreads.keys():
-        call_spreads[key] = round_down(call_spreads[key])
+    # put_spreads1 = [put_spread[key] for key, put_spread in put_spreads.items()]
+    # for key in put_spreads.keys():
+    #     put_spreads[key] = round_down(put_spreads[key])
+    # for key in call_spreads.keys():
+    #     call_spreads[key] = round_down(call_spreads[key])
     # print(time.time() - t1, 'spread_evs')
     return put_spreads, call_spreads
 
