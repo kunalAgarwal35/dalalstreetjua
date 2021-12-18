@@ -50,6 +50,7 @@ def new_probability_model(opt_ltps, opt_ois, mean, sd):
 
     calls = sort_by_strike(calls)
     puts = sort_by_strike(puts)
+
     _ = list(calls.keys())
     ma = max((name_to_strike(_[0]),name_to_strike(_[len(_)-1])))
     mi = min((name_to_strike(_[0]),name_to_strike(_[len(_)-1])))

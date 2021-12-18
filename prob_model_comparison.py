@@ -10,6 +10,8 @@ import statistics
 from scipy.stats import norm
 import math
 import datetime
+import opt_chain_probmodel as ocp
+import cProfile
 
 file_path = 'xlwings.xlsx'
 book = xw.Book(file_path)
@@ -26,6 +28,36 @@ def load_pbelow_pickle():
     return pb
 
 # pb = load_pbelow_pickle()
+
+def expiry_probability_monte(data):
+    pct_change = 100*np.log(data['index_expiry_price']/data['spot'])
+    pbelow = ocp.get_sample(data['ltps'])
+    rr = np.arange(int(min(pbelow)),int(max(pbelow)),5)
+    pbelow = pd.Series(pbelow)
+    rr = pd.Series(rr)
+    # _ = [len([i for i in pbelow if i < rr[j]])*100/len(pbelow) for j in range(0,len(rr))]
+    _ = [100*pbelow[pbelow < j].count()/pbelow.count() for j in rr]
+    pbelow = dict(zip(rr,_))
+    items = list(pbelow.items())
+
+    below_edge = 0
+    above_edge = 0
+    exp = data['index_expiry_price']
+    last_item = len(pbelow.items())-1
+    prob_event = 0
+    if exp < items[0][0]:
+        below_edge = 1
+        prob_event = items[0][1]
+    elif exp > items[last_item][0]:
+        above_edge = 1
+        prob_event = 100
+    else:
+        for i in range(0,last_item+1):
+            if exp < items[i+1][0]:
+                prob_event = items[i+1][1]
+                break
+
+    return prob_event,pct_change
 
 def expiry_probability_range(data, distnow):
     pct_change = 100*np.log(data['index_expiry_price']/data['spot'])
@@ -110,7 +142,7 @@ eventcount = 0
 sdate = datetime.datetime(2015,1,1)
 todate = datetime.datetime(2021,12,30)
 
-pbelow_dir = 'ev_backtest_pbelow'
+pbelow_dir = 'ev_backtest_data'
 for file in os.listdir(pbelow_dir):
     print(file)
     pb = pickle.load(open(os.path.join(pbelow_dir,file),'rb'))
@@ -120,9 +152,10 @@ for file in os.listdir(pbelow_dir):
         try:
             if sdate < timestamp <todate:
                 data = pb[timestamp]
+                if len(data['ltps']) < 25:
+                    continue
                 data['expiry'] = expiry_date
-                distnow = normal_distribution_cdfable(mean=data['mean'], sd=data['sd'])
-                prob_event,pct_change, prob_event_normal = expiry_probability_range(data, distnow)
+                prob_event,pct_change = expiry_probability_monte(data)
                 # df = df.append({'timestamp':timestamp,'prob_event':prob_event,'pct_change':pct_change},ignore_index=True)
                 freq = []
                 eventcount += 1
@@ -134,26 +167,13 @@ for file in os.listdir(pbelow_dir):
                 df['freq'] = freq
                 # df['occ'] = df['freq']*100/max(df['freq'])
                 df['occ'] = df['freq'] * 100 / eventcount
-                freq = []
-                for i in range(0, len(df)):
-                    if df['pct'][i] > prob_event_normal:
-                        freq.append(int(df['freq_norm'][i]) + 1)
-                    else:
-                        freq.append(int(df['freq_norm'][i]))
-                df['freq_norm'] = freq
-                # df['occ_norm'] = df['freq_norm'] * 100 / max(df['freq_norm'])
-                df['occ_norm'] = df['freq_norm'] * 100 / eventcount
-                if timestamp.hour == 10 and timestamp.minute == 0 and timestamp.second == 0:
-                    s.range('A1').value = df
-                    print_distribution(timestamp,data)
+                # if timestamp.minute == 0 and timestamp.second == 0:
+                s.range('A1').value = df
+                # print_distribution(timestamp,data)
                 print(timestamp)
                 opt_ltps = data['ltps']
                 opt_ois = data['ois']
                 spot = data['spot']
-                l = 0.97*spot
-                u = 1.03*spot
-                mean = data['mean']
-                sd = data['sd']
         except Exception as e:
             print(e)
             # print(fs.spread_evs_simple(opt_ltps=opt_ltps,opt_ois=opt_ois,mean=mean,sd=sd,l=l,u=u,spot=spot))

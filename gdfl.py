@@ -6,21 +6,21 @@ import pandas as pd
 
 location = 'E:/tickdata'
 excluded_folders = ['JAN_2019','saved_files']
-os.listdir(location)
-destination = 'cache'
+# os.listdir(location)
+destination = 'optdata_cache'
 
 
 def load_instruments():
     global location
     allins = []
     for monthyear in os.listdir(location):
-        if '.' in monthyear or monthyear in excluded_folders:
+        if monthyear in excluded_folders or '.' in monthyear:
             continue
         dates = os.listdir(os.path.join(location, monthyear))
         for date in dates:
             for csv in os.listdir(os.path.join(location, monthyear, date, 'Futures', '-I')):
                 csv = csv.replace('-I.NFO.csv', '')
-                if csv not in allins:
+                if csv not in allins and '.' not in csv:
                     allins.append(csv)
 
     return allins
@@ -49,7 +49,6 @@ def csv_breakdown_opt(csv):
     opt_name = csv[7:]
     breakdown = {'instrument': instrument, 'expiry': expiry, 'option_name': opt_name}
     return breakdown
-
 
 def rename_to_clean(dir):
     folders = os.listdir(dir)
@@ -80,9 +79,6 @@ def find_expiries(instrument):
     return expiries
 
 
-instruments = load_instruments()
-
-
 def get_opt_ltp_df(instrument, expiry, from_date):
     global location, excluded_folders
     if instrument not in instruments:
@@ -106,9 +102,10 @@ def get_opt_ltp_df(instrument, expiry, from_date):
                 try:
                     bd = csv_breakdown_opt(csv)
                 except Exception as e:
-                    print(os.path.join(location, monthyear, date, 'Options', csv), e)
+                    # print(os.path.join(location, monthyear, date, 'Options', csv), e)
+                    continue
                 if bd['instrument'] == instrument and bd['expiry'] == expiry:
-                    print(os.path.join(location, monthyear, date, 'Options', csv), bd['expiry'])
+                    # print(os.path.join(location, monthyear, date, 'Options', csv), bd['expiry'])
                     if csv.replace('.NFO.csv', '') not in dflist.keys():
                         dflist[csv.replace('.NFO.csv', '')] = pd.read_csv(
                             os.path.join(location, monthyear, date, 'Options', csv))
@@ -145,13 +142,13 @@ def opt_ltps(instrument, expiry):
             dtlist = [datetime.datetime.strptime(datelist[i] + ' ' + timelist[i], dtformat) for i in
                       range(0, len(datelist))]
         except Exception as e:
-            print(ins, e, expiry)
+            # print(ins, e, expiry)
             break
         # t1 = time.time()
         for timestamp in dtlist:
             timestampk = timestamp - datetime.timedelta(seconds=timestamp.second % 5)
             if timestampk not in list(ltps.keys()):
-                print(timestampk)
+                # print(timestampk)
                 ltps[timestampk] = {}
                 bidasks[timestampk] = {}
                 oi[timestampk] = {}
@@ -164,17 +161,39 @@ def opt_ltps(instrument, expiry):
     return ltps, bidasks, oi
 
 
-instrument = 'NIFTY'
-expiries = find_expiries(instrument)
-expiries.sort()
-n = 0
-p = {}
-for expiry in expiries:
-    print(expiry)
-    if datetime.date(2019, 2, 1) < expiry < datetime.datetime.now().date():
-        try:
-            opt_ltps(instrument, expiry)
-        except:
-            pass
-        n = n + 1
+def get_fut_ltp_df(instrument, expiry, from_date):
+    global location, excluded_folders
+    if instrument not in instruments:
+        print('Instrument not found')
+        return {}
+    dflist = {}
+    for monthyear in os.listdir(location):
+        print(monthyear)
+        if monthyear in excluded_folders or '.' in monthyear:
+            continue
+        dates = os.listdir(os.path.join(location, monthyear))
+        dates.sort()
+        for date in dates:
+            dtdate = datetime.datetime.strptime(date[-8:], '%d%m%Y').date()
+            if dtdate < from_date or dtdate > expiry:
+                continue
+            # rename_to_clean(os.path.join(location, monthyear, date))
+            for csv in os.listdir(os.path.join(location, monthyear, date, 'Futures','-I')):
+                if 'TV18BRDCST' in csv:
+                    continue
+                csvins = csv.replace('-I.NFO.csv', '')
+                if csvins == instrument:
+                    # print(os.path.join(location, monthyear, date, 'Options', csv), bd['expiry'])
+                    if csv.replace('-I.NFO.csv', '') not in dflist.keys():
+                        dflist[csv.replace('-I.NFO.csv', '')] = pd.read_csv(
+                            os.path.join(location, monthyear, date, 'Futures','-I', csv))
+                    else:
+                        dflist[csv.replace('-I.NFO.csv', '')] = pd.concat([dflist[csv.replace('-I.NFO.csv', '')],
+                                                                         pd.read_csv(
+                                                                             os.path.join(location, monthyear, date,
+                                                                                          'Futures','-I', csv))],
+                                                                        ignore_index=True)
 
+    return dflist[list(dflist.keys())[0]]
+
+instruments = load_instruments()
