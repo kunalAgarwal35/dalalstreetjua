@@ -18,17 +18,21 @@ class MongoFetch(object):
             for exp in expiry["expiry_dates"]:
                 unique_expiries.add(exp)
         for expiry in unique_expiries:
+            if os.path.isfile("mongodb_cached_files_anim/ltps_{}_{}.pickle".format(sym, expiry.strftime("%d%b%Y"))):
+                print("Found values for {} in cache".format(expiry.strftime("%d%b%Y")))
+                continue
             t0 = expiry - datetime.timedelta(days=60)
             months = pd.date_range(
-                t0#.strftime("%d-%m-%Y"),
-                ,expiry#.strftime("%d-%m-%Y"),
-                ,freq='MS').strftime("%b_%Y").tolist()
+                t0,
+                expiry,
+                freq='MS').strftime("%b_%Y").tolist()
             # print(months)
             print(expiry, t0, months)
             exp_data = dict()
             for month in months:
                 coll = "{}_options".format(month.upper())
                 collection = self.mongoconn["tick_data_csv"][coll]
+                # Expiration,Days,Strike,Call Bid,Call Ask,Put Bid,Put Ask
                 data = collection.find(
                     {
                         "sym": sym,
@@ -52,9 +56,9 @@ class MongoFetch(object):
                     unique_timestamps.add(row["ts"])
                 dumping_data = {ts: {"ltps": {}, "ois": {}, "bidasks": {}} for ts in list(unique_timestamps)}
                 for row in data:
-                    dumping_data[row["ts"]]["ltps"]["{}{}".format(row["str"], row["op_typ"])] = (float(row["bp"])+ float(row["sp"]))/2
-                    dumping_data[row["ts"]]["ois"]["{}{}".format(row["str"], row["op_typ"])] = float(row["oi"])
-                    dumping_data[row["ts"]]["bidasks"]["{}{}".format(row["str"], row["op_typ"])] = float(row["sp"]) - float(row["bp"])
+                    dumping_data[row["ts"]]["ltps"]["{}{}".format(int(row["str"]), row["op_typ"])] = (float(row["bp"])+ float(row["sp"]))/2
+                    dumping_data[row["ts"]]["ois"]["{}{}".format(int(row["str"]), row["op_typ"])] = float(row["oi"])
+                    dumping_data[row["ts"]]["bidasks"]["{}{}".format(int(row["str"]), row["op_typ"])] = float(row["sp"]) - float(row["bp"])
                 exp_data.update(dumping_data)
             print("Processed {}".format(coll))
             if save:
@@ -62,12 +66,12 @@ class MongoFetch(object):
             print("Saved {}".format(coll))
 
     def save_data(self, data, expiry, sym):
-        if not os.path.isdir("mongodb_cached_files_anim"):
-            os.mkdir("mongodb_cached_files_anim")
-        with open("mongodb_cached_files_anim/{}_{}.pickle".format(sym, expiry.strftime("%d%b%Y"), ), "wb") as f:
+        # if not os.path.isdir("mongodb_cached_files_anim"):
+        #     os.mkdir("mongodb_cached_files_anim")
+        with open("mongodb_cached_files_anim/ltps_{}_{}.pickle".format(sym, expiry.strftime("%d%b%Y"), ), "wb") as f:
             pickle.dump(data, f)
 
 if __name__ == "__main__":
     mf = MongoFetch()
     dfs = mf.get_data_for_expiry("NIFTY", True)
-    print(dfs)
+    # print(dfs)
