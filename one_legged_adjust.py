@@ -24,9 +24,10 @@ def get_expiry_files(pbelow_dir):
                         sorted([datetime.datetime.strptime(x, 'NIFTY_%d%b%Y.pkl') for x in expiry_files if 'NIFTY' in x])]
         expiry_files = dict(zip(expiry_files, [datetime.datetime.strptime(x, 'NIFTY_%d%b%Y.pkl') for x in expiry_files]))
     elif pbelow_dir == 'mongodb_cached_files_anim':
-        expiry_files = [i.strftime('NIFTY_%d%b%Y.pickle') for i in
-                        sorted([datetime.datetime.strptime(x, 'NIFTY_%d%b%Y.pickle') for x in expiry_files if 'NIFTY' in x])]
-        expiry_files = dict(zip(expiry_files, [datetime.datetime.strptime(x, 'NIFTY_%d%b%Y.pickle') for x in expiry_files]))
+        iupac = 'ltps_NIFTY_%d%b%Y.pickle'
+        expiry_files = [i.strftime(iupac) for i in
+                        sorted([datetime.datetime.strptime(x, iupac) for x in expiry_files if 'NIFTY' in x])]
+        expiry_files = dict(zip(expiry_files, [datetime.datetime.strptime(x, iupac) for x in expiry_files]))
     else:
         print('Invalid pbelow_dir')
         expiry_files = {}

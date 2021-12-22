@@ -73,7 +73,7 @@ check()
 
 
 
-with open("one_legged_ledgers_hd/ledgerNIFTY_28Feb2019.pkl", "rb") as f:
-    df = pickle.load(f)
-
-print(df.shape)
+# with open("one_legged_ledgers_hd/ledgerNIFTY_28Feb2019.pkl", "rb") as f:
+#     df = pickle.load(f)
+#
+# print(df.shape)
