@@ -381,7 +381,9 @@ def get_sample_normal_mutation(ltps, siz, bidasks):
     df.reset_index(drop=True, inplace=True)
     random_sample = []
     # get normal sample between 0.8* spot to 1.2* spot
-    nms = np.random.normal(loc=spot, scale=spot / 10, size=siz*10000)
+    sd = (df['breakeven'].max() - df['breakeven'].min()) / 6
+    nms = np.random.normal(loc=spot, scale=sd, size=siz*10000)
+    pd.Series(nms).hist(bins = 100)
     for i in range(len(df)):
         l,u = float(df['breakeven'][i]), float(df['breakeven'].shift(-1)[i])
         try:
