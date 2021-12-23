@@ -18,6 +18,10 @@ class MongoFetch(object):
             for exp in expiry["expiry_dates"]:
                 unique_expiries.add(exp)
         for expiry in unique_expiries:
+            if expiry.month == 1 and expiry.year == 2021:
+                continue
+            if expiry.month == 12 and expiry.year  == 2020:
+                continue
             if os.path.isfile("mongodb_cached_files_anim/ltps_{}_{}.pickle".format(sym, expiry.strftime("%d%b%Y"))):
                 print("Found values for {} in cache".format(expiry.strftime("%d%b%Y")))
                 continue

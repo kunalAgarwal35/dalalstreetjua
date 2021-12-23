@@ -262,7 +262,8 @@ def backtest_adjust(expiry_data,expiry, trade_range,percentile, nlots,lot_size,l
             else:
                 breakpoint()
             if timestamp.time() < last_trade_time or timestamp.date() < expiry_date:
-                dist = hd.get_combo_dist(timedata['ltps'],timestamp,expiry_date,vix_range=0.1,chain_weight=0.75, bidasks = timedata['bidasks'])
+                # dist = hd.get_combo_dist(timedata['ltps'],timestamp,expiry_date,vix_range=0.1,chain_weight=0.75, bidasks = timedata['bidasks'])
+                dist = hd.get_sample_normal_mutation(timedata['ltps'],5000,timedata['bidasks'])
                 if not len(dist):
                     continue
                 contract_evs = hd.get_evs_from_dist(dist,timedata['ltps'],timedata['bidasks'])
